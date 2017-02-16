@@ -18,14 +18,14 @@ DEFAULT_SETTINGS = {
   'd_loss_target': 0.3,
 
   # Generator Settings
-  'g_optimizer': 'adam',
+  'g_optimizer': Adam(1e-3),
   'g_ksize': 5,
   'g_depth': 64,
   'g_activation': lambda: LeakyReLU(),
   'g_regularizer': None,
 
   # Discriminator Settings
-  'd_optimizer': 'sgd',
+  'd_optimizer': SGD(),
   'd_ksize': 5,
   'd_depth': 32,
   'd_activation': lambda: LeakyReLU(),
