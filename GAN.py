@@ -12,17 +12,40 @@ from keras.regularizers import l2
 
 import tensorflow as tf
 
+DEFAULT_SETTINGS = {
+  # General settings
+  'input_mask': False, # replace the output with the input where the input != 0
+
+  # Generator Settings
+  'g_optimizer': 'adam',
+  'g_ksize': 5,
+  'g_depth': 64,
+  'g_activation': lambda: LeakyReLU(),
+  'g_regularizer': None,
+
+  # Discriminator Settings
+  'd_optimizer': 'sgd',
+  'd_ksize': 5,
+  'd_depth': 32,
+  'd_activation': lambda: LeakyReLU(),
+  'd_output_activation': 'sigmoid',
+  'd_regularizer': None,
+}
 
 class GAN(object):
 
-  def __init__(self, shape, input_mask=False):
+  def __init__(self, shape, settings=DEFAULT_SETTINGS):
     self.W = shape[0]
     self.H = shape[1]
     if len(shape) == 3:
       self.D = shape[2]
     else:
-      self.D = 1;
-    self.input_mask = input_mask
+      self.D = 1
+
+    self.settings = settings
+    for k in DEFAULT_SETTINGS.keys():
+      if not settings.get(k):
+        self.settings[k] = DEFAULT_SETTINGS[k]
 
     self._build()
 
@@ -80,57 +103,58 @@ class GAN(object):
     return self.discriminator.predict(x)      
 
 
-  def _build(self, gdepth=48, gactivation=lambda: LeakyReLU(), ddepth=32, dactivation=lambda: LeakyReLU()):
-    reg = lambda: None #l2()
+  def _build(self):
+    
+    GK = self.settings['g_ksize']
+    GD = self.settings['g_depth']
+    GA = to_lambda(self.settings['g_activation'])
+    GR = to_lambda(self.settings['g_regularizer'])
 
-    k = 5 # kernel size
     # GENERATOR
     # input
-    g_in = Input(shape=(self.W, self.H, self.D), name='g_in')    
+    g_in = Input(shape=(self.W, self.H, self.D))    
     # encode
-    g = Convolution2D(gdepth, k, k, border_mode='same', activation=gactivation(), W_regularizer=reg())(g_in)
+    g = Convolution2D(GD, GK, GK, border_mode='same', activation=GA(), W_regularizer=GR())(g_in)
     g = AveragePooling2D(pool_size=(2,2))(g)
-    g = Convolution2D(gdepth, k, k, border_mode='same', activation=gactivation(), W_regularizer=reg())(g)
+    g = Convolution2D(GD, GK, GK, border_mode='same', activation=GA(), W_regularizer=GR())(g)
     g = AveragePooling2D(pool_size=(2,2))(g)
-    g = Convolution2D(gdepth, k, k, border_mode='same', activation=gactivation(), W_regularizer=reg())(g)
+    g = Convolution2D(GD, GK, GK, border_mode='same', activation=GA(), W_regularizer=GR())(g)
     g = AveragePooling2D(pool_size=(2,2))(g)
-
-    # g = Flatten()(g)
-    # # g = Dense(output_dim=1024, activation=gactivation(), W_regularizer=reg())(g)
-    # g = Dense(output_dim=gdepth*(self.W/8)*(self.H/8), activation=gactivation(), W_regularizer=reg())(g)
-    # g = Reshape((self.W/8, self.H/8, gdepth))(g)
 
     #decode
-    g = Convolution2D(gdepth, k, k, border_mode='same', activation=gactivation(), W_regularizer=reg())(g)
+    g = Convolution2D(GD, GK, GK, border_mode='same', activation=GA(), W_regularizer=GR())(g)
     g = UpSampling2D(size=(2,2))(g)
-    g = Convolution2D(gdepth, k, k, border_mode='same', activation=gactivation(), W_regularizer=reg())(g)
+    g = Convolution2D(GD, GK, GK, border_mode='same', activation=GA(), W_regularizer=GR())(g)
     g = UpSampling2D(size=(2,2))(g)
-    g = Convolution2D(gdepth, k, k, border_mode='same', activation=gactivation(), W_regularizer=reg())(g)
+    g = Convolution2D(GD, GK, GK, border_mode='same', activation=GA(), W_regularizer=GR())(g)
     g = UpSampling2D(size=(2,2))(g)    
-    g = Convolution2D(gdepth, k, k, border_mode='same', activation=gactivation(), W_regularizer=reg())(g)
+    g = Convolution2D(GD, GK, GK, border_mode='same', activation=GA(), W_regularizer=GR())(g)
     # output
-    g_out = Convolution2D(self.D, k, k, border_mode='same', activation=gactivation(), W_regularizer=reg(), name='g_out')(g)
+    g_out = Convolution2D(self.D, GK, GK, border_mode='same', activation=GA(), W_regularizer=GR())(g)
 
-
-    if self.input_mask:
-      contour_combine = lambda x: x[0] + tf.cast(tf.equal(x[0], tf.zeros_like(x[0])), tf.float32) * x[1]
-      g_out = merge([g_in, g_out], mode=contour_combine, output_shape=(self.W, self.H, self.D))
+    if self.settings['input_mask']:
+      mask_func = lambda x: x[0] + tf.cast(tf.equal(x[0], tf.zeros_like(x[0])), tf.float32) * x[1]
+      g_out = merge([g_in, g_out], mode=mask_func, output_shape=(self.W, self.H, self.D))
     
-    print g_out.get_shape()
     # DESCRIMINATOR
-    # conv
-    d_in = Input(shape=(self.W, self.H, self.D), name='d_in')
-    d = Convolution2D(ddepth, k, k, border_mode='same', activation=dactivation())(d_in)
+    DK = self.settings['d_ksize']
+    DD = self.settings['d_depth']
+    DA = to_lambda(self.settings['d_activation'])
+    DOA = to_lambda(self.settings['d_output_activation'])
+    DR = to_lambda(self.settings['d_regularizer'])
+    
+    d_in = Input(shape=(self.W, self.H, self.D))
+    d = Convolution2D(DD, DK, DK, border_mode='same', activation=DA(), W_regularizer=DR())(d_in)
     d = AveragePooling2D(pool_size=(2,2))(d)
-    d = Convolution2D(ddepth, k, k, border_mode='same', activation=dactivation())(d)
+    d = Convolution2D(DD, DK, DK, border_mode='same', activation=DA(), W_regularizer=DR())(d)
     d = AveragePooling2D(pool_size=(2,2))(d)
     # fully connected
     d = Flatten()(d)
-    d = Dense(output_dim=256, activation=dactivation())(d)
-    d_out = Dense(output_dim=1, activation='sigmoid', name='d_out')(d)
+    d = Dense(output_dim=256, activation=DA(), W_regularizer=DR())(d)
+    d_out = Dense(output_dim=1, activation=DOA(), W_regularizer=DR())(d)
 
-    g_optimizer = Adam(1e-2)
-    d_optimizer = SGD()    
+    g_optimizer = to_lambda(self.settings['g_optimizer'])()
+    d_optimizer = to_lambda(self.settings['d_optimizer'])()
 
     self.discriminator = Model(d_in, d_out);    
     self.generator = Model(g_in, g_out);
@@ -145,20 +169,27 @@ class GAN(object):
 
     self._enable_training(self.discriminator, True)
     self.discriminator.compile(optimizer=d_optimizer, loss='binary_crossentropy')
-    self.generator.compile(optimizer='sgd', loss='mse')
+    self.generator.compile(optimizer='sgd', loss='mse') # doesn't matter?
     
     self._enable_training(self.discriminator, False)
 
     self.model.compile(optimizer=g_optimizer,
       loss=['mse', 'binary_crossentropy'],
       loss_weights=[1e4, 1])
-
-    # self.discriminator.summary()
-    # self.generator.summary()
-    # self.model.summary()
-
+    
+  def summary(self):
+    self.model.summary()
+    self.generator.summmary()
+    self.discriminator.summary()
+    
 
   def _enable_training(self, model, enable):
     model.trainable = enable
     for l in model.layers:
       l.trainable = enable
+
+def to_lambda(s):
+  if not callable(s):
+    s_val = s
+    return lambda: s_val
+  return s
