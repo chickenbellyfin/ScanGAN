@@ -62,7 +62,7 @@ class GAN(object):
 
     for epoch in range(epochs):
 
-      if epoch == 0 or self.d_loss > self.settings.['d_loss_target']:
+      if epoch == 0 or self.d_loss > self.settings['d_loss_target']:
         for batch in range(batches):
           batch_x = x[batch * batch_size : (batch+1) * batch_size]
           batch_y = y[batch * batch_size : (batch+1) * batch_size]
