@@ -1,5 +1,5 @@
 # ScanGAN
 
-Convenient GAN implementation in [Keras](keras.io)
+Convenient GAN implementation in [Keras](http://keras.io)
 
 WIP
