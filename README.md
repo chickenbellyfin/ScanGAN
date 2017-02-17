@@ -19,7 +19,7 @@ pred = model.generate(x[0])
 ```
 
 ## Settings
-You may construct the model with some custom hyperparameters by passing in a *settinng* object at construction.
+You may construct the model with some custom hyperparameters by passing in a *settings* object at construction.
 
 ```python
 from keras.optimizers import Adagrad
